@@ -1,6 +1,6 @@
 {
-  "name": "n8n-nodes-wordpress-nano-banana",
-  "version": "1.0.3",
+  "name": "n8n-nodes-gemini-nano-banana-pro",
+  "version": "1.0.0",
   "description": "n8n community node for generating images using Google Gemini API",
   "keywords": [
     "n8n-community-node-package",
@@ -9,13 +9,12 @@
     "google",
     "ai",
     "image-generation",
-    "wordpress",
-    "featured-image"
+    "nano-banana"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/tamtinhte365/n8n-nodes-wordpress-nano-banana",
+  "homepage": "https://github.com/tamtinhte365/node-gemini",
   "author": {
-    "name": "tamtinhte365",
+    "name": "Tám Công Nghệ",
     "email": "your-email@example.com"
   },
   "repository": {
@@ -40,7 +39,7 @@
       "dist/credentials/GeminiApi.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/GeminiImageGenerator/GeminiImageGenerator.node.js"
+      "dist/nodes/NanoBananaProGenerator/NanoBananaProGenerator.node.js"
     ]
   },
   "devDependencies": {

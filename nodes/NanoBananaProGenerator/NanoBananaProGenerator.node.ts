@@ -6,17 +6,17 @@ import {
 	NodeOperationError,
 } from 'n8n-workflow';
 
-export class GeminiImageGenerator implements INodeType {
+export class NanoBananaProGenerator implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Gemini Image Generator',
-		name: 'geminiImageGenerator',
+		displayName: 'Nano Banana Pro Generator',
+		name: 'nanoBananaProGenerator',
 		icon: 'file:gemini.svg',
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
-		description: 'Generate images using Google Gemini API (gemini-3-pro-image-preview)',
+		description: 'Generate images using Google Gemini API',
 		defaults: {
-			name: 'Gemini Image Generator',
+			name: 'Nano Banana Pro Generator',
 		},
 		inputs: ['main'],
 		outputs: ['main'],
@@ -34,9 +34,9 @@ export class GeminiImageGenerator implements INodeType {
 				typeOptions: {
 					rows: 6,
 				},
-				default: 'Tạo ảnh đại diện cho bài viết về chủ đề: "{{ $json.title }}"\nYêu cầu: KHÔNG chèn chữ, chỉ là ảnh để làm nổi bật ý nghĩa của tiêu đề trên.',
+				default: '',
 				required: true,
-				description: 'Prompt for image generation. Use expressions like {{ $json.title }} to get data from previous nodes.',
+				description: 'Prompt for image generation. You can use fixed text or expressions like {{ $json.title }} to get data from previous nodes.',
 			},
 			{
 				displayName: 'Aspect Ratio',
@@ -256,9 +256,10 @@ export class GeminiImageGenerator implements INodeType {
 				}
 			} catch (error) {
 				if (this.continueOnFail()) {
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 					returnData.push({
 						json: {
-							error: error.message,
+							error: errorMessage,
 						},
 						pairedItem: {
 							item: i,
