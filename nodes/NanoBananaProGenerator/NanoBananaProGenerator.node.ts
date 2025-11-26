@@ -14,7 +14,7 @@ export class NanoBananaProGenerator implements INodeType {
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
-		description: 'Generate images using Google Gemini API',
+		description: 'Generate images using Google Gemini API with auto-optimization and retry logic',
 		defaults: {
 			name: 'Nano Banana Pro Generator',
 		},
@@ -121,10 +121,106 @@ export class NanoBananaProGenerator implements INodeType {
 				},
 				description: 'Name of the binary property to store the image',
 			},
+			{
+				displayName: 'Auto-Optimize Image',
+				name: 'autoOptimize',
+				type: 'boolean',
+				default: false,
+				displayOptions: {
+					show: {
+						outputFormat: ['binary'],
+					},
+				},
+				description: 'Whether to automatically compress and optimize the generated image to reduce file size',
+			},
+			{
+				displayName: 'Optimization Quality',
+				name: 'optimizationQuality',
+				type: 'number',
+				default: 85,
+				typeOptions: {
+					minValue: 1,
+					maxValue: 100,
+				},
+				displayOptions: {
+					show: {
+						outputFormat: ['binary'],
+						autoOptimize: [true],
+					},
+				},
+				description: 'Image quality after optimization (1-100). Higher = better quality but larger file size.',
+			},
+			{
+				displayName: 'Max Retry Attempts',
+				name: 'maxRetries',
+				type: 'number',
+				default: 3,
+				typeOptions: {
+					minValue: 0,
+					maxValue: 5,
+				},
+				description: 'Number of retry attempts if the API request fails (0-5)',
+			},
 		],
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+		// Helper function for retry logic with exponential backoff
+		const makeRequestWithRetry = async (
+			apiUrl: string,
+			requestBody: any,
+			apiKey: string,
+			maxRetries: number,
+			itemIndex: number,
+		): Promise<any> => {
+			let lastError: Error | null = null;
+
+			for (let attempt = 0; attempt <= maxRetries; attempt++) {
+				try {
+					const response = await this.helpers.request({
+						method: 'POST',
+						url: apiUrl,
+						body: requestBody,
+						json: true,
+						qs: {
+							key: apiKey,
+						},
+					});
+					return response;
+				} catch (error) {
+					lastError = error instanceof Error ? error : new Error('Unknown error');
+
+					// Don't retry on the last attempt
+					if (attempt < maxRetries) {
+						// Exponential backoff: 2s, 4s, 8s
+						const delayMs = Math.pow(2, attempt + 1) * 1000;
+						await new Promise(resolve => setTimeout(resolve, delayMs));
+					}
+				}
+			}
+
+			throw new NodeOperationError(
+				this.getNode(),
+				`Failed after ${maxRetries + 1} attempts: ${lastError?.message}`,
+				{ itemIndex }
+			);
+		};
+
+		// Helper function for image optimization
+		const optimizeImage = async (buffer: Buffer, quality: number): Promise<Buffer> => {
+			try {
+				// Try to use sharp if available
+				const sharp = await import('sharp');
+				return await sharp.default(buffer)
+					.png({ quality, compressionLevel: 9 })
+					.toBuffer();
+			} catch (error) {
+				// If sharp is not available, return original buffer
+				// This allows the node to work even without sharp installed
+				return buffer;
+			}
+		};
+
 		const items = this.getInputData();
 		const returnData: INodeExecutionData[] = [];
 
@@ -135,7 +231,17 @@ export class NanoBananaProGenerator implements INodeType {
 				const aspectRatio = this.getNodeParameter('aspectRatio', i) as string;
 				const imageSize = this.getNodeParameter('imageSize', i) as string;
 				const outputFormat = this.getNodeParameter('outputFormat', i) as string;
+				const maxRetries = this.getNodeParameter('maxRetries', i) as number;
 				const credentials = await this.getCredentials('geminiApi');
+
+				// Validate prompt is not empty
+				if (!prompt || prompt.trim().length === 0) {
+					throw new NodeOperationError(
+						this.getNode(),
+						'Prompt cannot be empty. Please enter a valid prompt for image generation.',
+						{ itemIndex: i }
+					);
+				}
 
 				// Prepare request body (REST API format)
 				const requestBody = {
@@ -158,17 +264,15 @@ export class NanoBananaProGenerator implements INodeType {
 					},
 				};
 
-				// Make API request using streamGenerateContent endpoint
+				// Make API request with retry logic
 				const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent`;
-				const response = await this.helpers.request({
-					method: 'POST',
-					url: apiUrl,
-					body: requestBody,
-					json: true,
-					qs: {
-						key: credentials.apiKey as string,
-					},
-				});
+				const response = await makeRequestWithRetry(
+					apiUrl,
+					requestBody,
+					credentials.apiKey as string,
+					maxRetries,
+					i
+				);
 
 				// For JSON debug output
 				if (outputFormat === 'json') {
@@ -229,17 +333,32 @@ export class NanoBananaProGenerator implements INodeType {
 				// Output based on selected format
 				if (outputFormat === 'binary') {
 					const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i) as string;
-					const buffer = Buffer.from(imageData, 'base64');
+					const autoOptimize = this.getNodeParameter('autoOptimize', i) as boolean;
+					const originalBuffer = Buffer.from(imageData, 'base64');
+					const originalSize = originalBuffer.length;
+
+					// Apply optimization if enabled
+					let finalBuffer: Buffer;
+					if (autoOptimize) {
+						const quality = this.getNodeParameter('optimizationQuality', i) as number;
+						const optimizedBuffer = await optimizeImage(originalBuffer, quality);
+						finalBuffer = Buffer.from(optimizedBuffer);
+					} else {
+						finalBuffer = originalBuffer;
+					}
 
 					returnData.push({
 						json: {
 							...items[i].json,
 							mimeType,
-							fileSize: buffer.length,
+							fileSize: finalBuffer.length,
+							originalSize: autoOptimize ? originalSize : undefined,
+							optimized: autoOptimize,
+							compressionRatio: autoOptimize ? `${((1 - finalBuffer.length / originalSize) * 100).toFixed(1)}%` : undefined,
 						},
 						binary: {
 							[binaryPropertyName]: await this.helpers.prepareBinaryData(
-								buffer,
+								finalBuffer,
 								`generated-image-${Date.now()}.${mimeType.split('/')[1]}`,
 								mimeType
 							),

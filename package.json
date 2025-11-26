@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-gemini-nano-banana-pro",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "n8n community node for generating images using Google Gemini API",
   "keywords": [
     "n8n-community-node-package",
@@ -54,5 +54,8 @@
   },
   "peerDependencies": {
     "n8n-workflow": "*"
+  },
+  "dependencies": {
+    "sharp": "^0.34.5"
   }
 }
