@@ -1,0 +1,59 @@
+{
+  "name": "n8n-nodes-wordpress-nano-banana",
+  "version": "1.0.3",
+  "description": "n8n community node for generating images using Google Gemini API",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "gemini",
+    "google",
+    "ai",
+    "image-generation",
+    "wordpress",
+    "featured-image"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/tamtinhte365/n8n-nodes-wordpress-nano-banana",
+  "author": {
+    "name": "tamtinhte365",
+    "email": "your-email@example.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tamtinhte365/node-gemini.git"
+  },
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc && gulp build:icons",
+    "dev": "tsc --watch",
+    "format": "prettier nodes credentials --write",
+    "lint": "eslint nodes credentials package.json",
+    "lintfix": "eslint nodes credentials package.json --fix",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/GeminiApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/GeminiImageGenerator/GeminiImageGenerator.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.42.0",
+    "eslint-plugin-n8n-nodes-base": "^1.16.1",
+    "gulp": "^4.0.2",
+    "n8n-workflow": "*",
+    "prettier": "^3.0.0",
+    "typescript": "^5.1.3"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}
