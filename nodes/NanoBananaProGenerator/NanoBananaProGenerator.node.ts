@@ -173,7 +173,8 @@ export class NanoBananaProGenerator implements INodeType {
 			maxRetries: number,
 			itemIndex: number,
 		): Promise<any> => {
-			let lastError: Error | null = null;
+			let lastError: any = null;
+			const errorLog: string[] = [];
 
 			for (let attempt = 0; attempt <= maxRetries; attempt++) {
 				try {
@@ -189,20 +190,35 @@ export class NanoBananaProGenerator implements INodeType {
 					});
 					return response;
 				} catch (error) {
-					lastError = error instanceof Error ? error : new Error('Unknown error');
+					lastError = error;
+					const errorMsg = error instanceof Error ? error.message : String(error);
+					const attemptLog = `Attempt ${attempt + 1}/${maxRetries + 1} failed: ${errorMsg}`;
+					errorLog.push(attemptLog);
 
 					// Don't retry on the last attempt
 					if (attempt < maxRetries) {
 						// Exponential backoff: 2s, 4s, 8s
 						const delayMs = Math.pow(2, attempt + 1) * 1000;
+						errorLog.push(`Retrying in ${delayMs / 1000}s...`);
 						await new Promise(resolve => setTimeout(resolve, delayMs));
 					}
 				}
 			}
 
+			// Create detailed error message
+			const errorDetails = {
+				message: lastError instanceof Error ? lastError.message : 'Unknown error',
+				stack: lastError instanceof Error ? lastError.stack : undefined,
+				attempts: maxRetries + 1,
+				attemptLog: errorLog,
+				apiUrl,
+				statusCode: lastError?.statusCode,
+				cause: lastError?.cause,
+			};
+
 			throw new NodeOperationError(
 				this.getNode(),
-				`Failed after ${maxRetries + 1} attempts: ${lastError?.message}`,
+				`❌ API Request Failed\n\n${JSON.stringify(errorDetails, null, 2)}`,
 				{ itemIndex }
 			);
 		};
@@ -386,10 +402,24 @@ export class NanoBananaProGenerator implements INodeType {
 				}
 			} catch (error) {
 				if (this.continueOnFail()) {
-					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					// Comprehensive error details for continue on fail mode
+				const errorDetails = {
+					error: error instanceof Error ? error.message : 'Unknown error',
+					errorType: error instanceof Error ? error.constructor.name : typeof error,
+					stack: error instanceof Error ? error.stack : undefined,
+					statusCode: (error as any)?.statusCode,
+					statusMessage: (error as any)?.statusMessage,
+					cause: (error as any)?.cause,
+					timestamp: new Date().toISOString(),
+					itemIndex: i,
+					prompt: this.getNodeParameter('prompt', i) as string,
+				};
+				const errorMessage = errorDetails.error;
+
 					returnData.push({
 						json: {
-							error: errorMessage,
+							success: false,
+							...errorDetails,
 						},
 						pairedItem: {
 							item: i,
@@ -397,7 +427,22 @@ export class NanoBananaProGenerator implements INodeType {
 					});
 					continue;
 				}
-				throw error;
+				// Enhanced error for fail mode
+			const enhancedError = new NodeOperationError(
+				this.getNode(),
+				error instanceof Error ? error.message : 'Unknown error occurred',
+				{
+					itemIndex: i,
+					description: `Full error details:\n${JSON.stringify({
+						message: error instanceof Error ? error.message : String(error),
+						type: error instanceof Error ? error.constructor.name : typeof error,
+						stack: error instanceof Error ? error.stack : undefined,
+						statusCode: (error as any)?.statusCode,
+						cause: (error as any)?.cause,
+					}, null, 2)}`,
+				}
+			);
+			throw enhancedError;
 			}
 		}
 
