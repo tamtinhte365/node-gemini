@@ -182,6 +182,7 @@ export class NanoBananaProGenerator implements INodeType {
 						url: apiUrl,
 						body: requestBody,
 						json: true,
+						timeout: 120000, // 120 seconds timeout per request
 						qs: {
 							key: apiKey,
 						},
@@ -207,15 +208,25 @@ export class NanoBananaProGenerator implements INodeType {
 		};
 
 		// Helper function for image optimization
-		const optimizeImage = async (buffer: Buffer, quality: number): Promise<Buffer> => {
+		const optimizeImage = async (buffer: Buffer, quality: number, mimeType: string): Promise<Buffer> => {
 			try {
 				// Try to use sharp if available
 				const sharp = await import('sharp');
-				return await sharp.default(buffer)
-					.png({ quality, compressionLevel: 9 })
-					.toBuffer();
+				const sharpInstance = sharp.default(buffer);
+
+				// Optimize based on actual mime type
+				if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {
+					return await sharpInstance.jpeg({ quality }).toBuffer();
+				} else if (mimeType.includes('png')) {
+					return await sharpInstance.png({ quality, compressionLevel: 9 }).toBuffer();
+				} else if (mimeType.includes('webp')) {
+					return await sharpInstance.webp({ quality }).toBuffer();
+				} else {
+					// Unsupported format, return original
+					return buffer;
+				}
 			} catch (error) {
-				// If sharp is not available, return original buffer
+				// If sharp is not available or optimization fails, return original buffer
 				// This allows the node to work even without sharp installed
 				return buffer;
 			}
@@ -341,7 +352,7 @@ export class NanoBananaProGenerator implements INodeType {
 					let finalBuffer: Buffer;
 					if (autoOptimize) {
 						const quality = this.getNodeParameter('optimizationQuality', i) as number;
-						const optimizedBuffer = await optimizeImage(originalBuffer, quality);
+						const optimizedBuffer = await optimizeImage(originalBuffer, quality, mimeType);
 						finalBuffer = Buffer.from(optimizedBuffer);
 					} else {
 						finalBuffer = originalBuffer;
